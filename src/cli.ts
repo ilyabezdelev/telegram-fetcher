@@ -3,6 +3,7 @@
 import { Command } from 'commander';
 import { init } from './commands/init.js';
 import { profileAdd, profileList, profileRemove } from './commands/profile.js';
+import { fetch } from './commands/fetch.js';
 
 const program = new Command();
 
@@ -71,12 +72,15 @@ profileCommand
     }
   });
 
-// Main fetch command (placeholder for now)
-program.action(() => {
-  console.log();
-  console.log('Main fetch command not implemented yet.');
-  console.log('Run "telegram-fetch init" to set up a directory.');
-  console.log();
+program.action(async () => {
+  try {
+    await fetch();
+  } catch (error) {
+    console.error();
+    console.error('✗ Error:', error instanceof Error ? error.message : String(error));
+    console.error();
+    process.exit(1);
+  }
 });
 
 program.parse();

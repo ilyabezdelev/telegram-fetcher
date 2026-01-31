@@ -60,35 +60,31 @@ A CLI tool to fetch latest messages from Telegram (bots, channels, groups, saved
 ```json
 {
   "profile": "bot-profile-name",
-  "userId": 987654321  // Optional: Override userId from profile
+  "telegramUserId": 987654321  // Optional: Override telegramUserId from profile
 }
 ```
-
-**Local state file** (in project directory - `.last-fetched-id`):
-```
-12345
-```
-- Plain text file with just the message ID
-- Updated on every fetch (safe to overwrite frequently)
-- Can be `.gitignore`d separately from config
-- Matches pattern from existing telegram posts implementation
 
 **Global profiles file** (`~/.telegram-fetcher/profiles.json`):
 ```json
 {
   "bot-profile-name": {
-    "token": "123456:ABC-DEF...",
-    "description": "My content bot",
-    "userId": 123456789  // Required: Your Telegram user ID
+    "telegramBotToken": "123456:ABC-DEF...",
+    "telegramUserId": 123456789,
+    "botDescription": "My content bot"
   }
 }
 ```
 
-**User ID behavior:**
+**Telegram User ID behavior:**
 - Required in global profile (error if not set)
 - Can be overridden in local config (optional)
-- When fetching: use local userId if set, otherwise use profile userId
+- When fetching: use local telegramUserId if set, otherwise use profile telegramUserId
 - Only messages from this user ID will be fetched
+
+**No state tracking:**
+- Telegram Bot API automatically confirms updates when fetched via `getUpdates`
+- Each run of `telegram-fetch` fetches all unconsumed updates
+- No need to track last fetched message/update ID
 
 ### 3. Output Format - DECIDED
 
@@ -149,13 +145,13 @@ Message text content here...
 
 ### `telegram-fetch` (Main command - Non-interactive)
 1. Check if local config exists, error if not
-2. Read last fetched ID from `.last-fetched-id` (or 0 if doesn't exist)
-3. Load profile from global profiles.json
+2. Load profile from global profiles.json
+3. Get effective Telegram user ID (local override or profile default)
 4. Connect to Telegram with bot token
-5. Fetch messages since last message ID
-6. Download text + media (audio, images)
-7. Save as markdown files with front matter
-8. Update `.last-fetched-id` with latest message ID
+5. Fetch all unconsumed updates (automatically confirmed by API)
+6. Filter messages by telegramUserId
+7. Download text + media (audio, images)
+8. Save as markdown files with front matter
 
 ### `telegram-fetch profile add` (Interactive)
 - Prompt: "Profile name:"
@@ -227,71 +223,86 @@ telegram-fetcher/
 
 ## Implementation Phases
 
-### Phase 1: Bootstrap CLI Framework 🎯 CURRENT
+### Phase 1: Bootstrap CLI Framework ✅ COMPLETE
 **Goal:** Get the CLI working so you can run `telegram-fetch init` and start testing with real bot tokens.
 
-**Tasks:**
-1. Set up TypeScript project structure
+**Completed Tasks:**
+1. ✅ Set up TypeScript project structure
    - Initialize npm project
    - Configure TypeScript (tsconfig.json matching audio-note-transcripts)
    - Set up build scripts (`build`, `dev`)
    - Configure prettier
 
-2. Install dependencies
+2. ✅ Install dependencies
    - `commander` - CLI framework
    - `@inquirer/prompts` - Interactive prompts
    - `@types/node` - TypeScript types
    - `tsx` - Development runtime
    - `prettier` - Code formatting
 
-3. Create basic CLI structure
+3. ✅ Create basic CLI structure
    - `src/cli.ts` - Main entry point with Commander setup
-   - `src/commands/init.ts` - Init command skeleton
-   - `src/commands/profile.ts` - Profile commands skeleton
+   - `src/commands/init.ts` - Init command
+   - `src/commands/profile.ts` - Profile commands
    - `src/lib/config.ts` - Config file utilities
    - `src/lib/profiles.ts` - Profile management utilities
+   - `src/lib/user.ts` - User ID resolution
    - `src/types.ts` - TypeScript type definitions
 
-4. Implement profile management
+4. ✅ Implement profile management
    - Global profiles.json read/write
    - `telegram-fetch profile add` - Interactive add with masked token input
    - `telegram-fetch profile list` - List all profiles
    - `telegram-fetch profile remove` - Interactive removal
    - Profile validation (name, token format)
+   - Telegram user ID requirement (global + local override)
 
-5. Implement init command
+5. ✅ Implement init command
    - `telegram-fetch init` - Interactive profile selection
    - Create local `telegram-fetcher.config.json`
    - Create empty `.last-fetched-id` file
    - Handle existing config (ask to overwrite)
    - Option to add new profile inline
+   - Optional local Telegram user ID override
 
-6. Make globally installable
+6. ✅ Make globally installable
    - Configure `bin` in package.json
    - Test with `npm link`
    - Verify all commands work globally
 
-**Deliverable:** Working CLI that can manage profiles and initialize directories. Ready to add Telegram fetching logic.
+7. ✅ Verbose variable naming
+   - `telegramBotToken`, `telegramUserId`, `botDescription`
+   - Clean, less verbose code comments
 
-**Test it:**
+**Deliverable:** ✅ Working CLI that can manage profiles and initialize directories. Ready to add Telegram fetching logic.
+
+**Usage:**
 ```bash
 npm link
 telegram-fetch profile add
-# Add your bot token interactively
 telegram-fetch init
-# Select the profile you just added
 ls -la  # Should see telegram-fetcher.config.json and .last-fetched-id
 ```
 
-### Phase 2: Core Telegram Fetching
-**Goal:** Connect to Telegram and fetch messages (no media yet, just text).
+### Phase 2: Core Telegram Fetching ✅ COMPLETE
+**Goal:** Connect to Telegram and fetch messages (text only, no media yet).
 
-**Tasks:**
-1. Install Telegraf dependency
-2. Implement `src/lib/telegram.ts` - Telegram API wrapper
-3. Implement basic message fetching from bot
-4. Test with a real bot receiving messages
-5. Update `.last-fetched-id` after fetch
+**Completed Tasks:**
+1. ✅ Install Telegraf dependency
+2. ✅ Install gray-matter for front matter handling
+3. ✅ Implement `src/lib/telegram.ts` - Telegram API wrapper
+4. ✅ Implement `src/lib/storage.ts` - Message storage with front matter
+5. ✅ Implement `src/commands/fetch.ts` - Main fetch command
+6. ✅ Filter messages by telegramUserId
+7. ✅ Test with real bot receiving messages
+8. ✅ Remove state tracking (Telegram API auto-confirms updates)
+9. ✅ Clean up debug logging
+
+**How it works:**
+- Calls `getUpdates` to fetch unconsumed messages
+- Telegram automatically confirms updates (no manual tracking needed)
+- Filters by telegramUserId
+- Saves messages as markdown with YAML front matter using gray-matter
 
 ### Phase 3: Message Storage & Media Downloads
 **Goal:** Save messages as markdown with YAML front matter and download media.
@@ -381,8 +392,7 @@ telegram-fetch
 **Summary of output structure:**
 ```
 project-directory/
-├── telegram-fetcher.config.json  # Static config (profile name)
-├── .last-fetched-id              # Dynamic state (last message ID)
+├── telegram-fetcher.config.json  # Static config (profile name, optional userId override)
 ├── 12345.md                      # Message text with front matter
 ├── 12345.ogg                     # Voice message audio
 ├── 12346.md                      # Another message
@@ -393,10 +403,11 @@ project-directory/
 
 **Recommended .gitignore:**
 ```
-.last-fetched-id
 *.md
 *.jpg
 *.png
 *.ogg
 *.mp3
+!README.md
+!CLAUDE.md
 ```
