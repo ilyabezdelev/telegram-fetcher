@@ -32,7 +32,7 @@ export async function fetch(): Promise<void> {
   let latestUpdateId = lastUpdateId;
 
   for (const message of messages) {
-    saveMessage(message);
+    await saveMessage(message, profile.telegramBotToken);
     console.log(`✓ Saved message ${message.messageId}`);
 
     if (message.updateId > latestUpdateId) {

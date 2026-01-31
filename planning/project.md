@@ -16,12 +16,16 @@ A CLI tool to fetch latest messages from Telegram (bots, channels, groups, saved
 - No access to saved messages (user personal storage)
 - Bot must be added to channels/groups to fetch messages
 
-### Content Types
+### Content Types (All Supported ✅)
 - **Text content**: Message text and captions
-- **Images**: Photo attachments
-- **Audio messages**: Voice messages and audio files (**CRITICAL REQUIREMENT**)
-  - The chosen library MUST support audio message downloads
-  - This is a primary use case for the tool
+- **Photos**: Photo attachments
+- **Audio**: Audio files
+- **Voice**: Voice messages (**CRITICAL REQUIREMENT** ✅)
+- **Documents**: PDFs, DOCs, text files, etc.
+- **Videos**: Video files
+- **Animations**: GIFs
+- **Stickers**: Telegram stickers
+- **Video notes**: Circular video messages
 
 ### Incremental Fetching
 - Store the latest fetched message ID in a local config file
@@ -288,42 +292,57 @@ ls -la  # Should see telegram-fetcher.config.json and .last-fetched-id
 **Goal:** Connect to Telegram and fetch messages (text only, no media yet).
 
 **Completed Tasks:**
-1. ✅ Install Telegraf dependency
+1. ✅ Install Telegraf dependency (types only)
 2. ✅ Install gray-matter for front matter handling
-3. ✅ Implement `src/lib/telegram.ts` - Telegram API wrapper
+3. ✅ Implement `src/lib/telegram.ts` - Direct Telegram API calls
 4. ✅ Implement `src/lib/storage.ts` - Message storage with front matter
 5. ✅ Implement `src/commands/fetch.ts` - Main fetch command
 6. ✅ Filter messages by telegramUserId
-7. ✅ Test with real bot receiving messages
-8. ✅ Remove state tracking (Telegram API auto-confirms updates)
-9. ✅ Clean up debug logging
+7. ✅ Restore `.last-fetched-id` tracking (updates not auto-confirmed)
+8. ✅ Fix offset bug by using direct API instead of Telegraf wrapper
+9. ✅ Add messageId to front matter
+10. ✅ Test with real bot - working correctly
 
 **How it works:**
-- Calls `getUpdates` to fetch unconsumed messages
-- Telegram automatically confirms updates (no manual tracking needed)
-- Filters by telegramUserId
-- Saves messages as markdown with YAML front matter using gray-matter
+- Calls Telegram Bot API directly via `fetch()` to get updates
+- Uses offset = lastUpdateId + 1 for pagination
+- Filters messages by telegramUserId
+- Saves messages as markdown with YAML front matter (date, messageId)
+- Tracks last update ID in `.last-fetched-id` file
 
-### Phase 3: Message Storage & Media Downloads
-**Goal:** Save messages as markdown with YAML front matter and download media.
+### Phase 3: Media Downloads ✅ COMPLETE
+**Goal:** Download and save all media attachments.
 
-**Tasks:**
-1. Implement markdown generation with front matter
-2. Download and save images
-3. Download and save audio/voice messages
-4. Handle multiple media per message (suffixes)
-5. Test with messages containing various media types
+**Completed Tasks:**
+1. ✅ Detect all media types (photos, audio, voice, documents, videos, animations, stickers, video notes)
+2. ✅ Download media via Telegram API (getFile + file download)
+3. ✅ Extract real file extensions from API response
+4. ✅ Support captions for photos and media (not just text messages)
+5. ✅ Handle multiple attachments per message (numbered suffixes)
+6. ✅ Preserve original filenames when available
+7. ✅ Test with various media types
 
-### Phase 4: Polish & Documentation
+**How it works:**
+- Detects all attachment types in messages
+- Collects file_id and fileName (if available) for each attachment
+- Downloads each file via `getFile` API to get file_path
+- Extracts extension from file_path
+- Saves files with naming pattern:
+  - With filename: `{messageId}_{filename}.ext` (e.g., `20_document.docx`)
+  - Without filename: `{messageId}_{index}.ext` (e.g., `20_1.jpg`, `20_2.oga`)
+- Supports: photos, audio, voice, documents, videos, animations, stickers, video notes
+
+### Phase 4: Polish & Documentation 🎯 NEXT
 **Goal:** Production-ready tool with documentation.
 
 **Tasks:**
-1. Error handling and validation
-2. Rate limiting handling
-3. README with installation and usage
-4. Update CLAUDE.md
-5. Add .gitignore template
-6. Consider publishing to npm (optional)
+1. Error handling improvements
+2. Rate limiting handling (if needed)
+3. Write comprehensive README
+4. Update CLAUDE.md with final architecture
+5. Remove debug output (punycode deprecation warning)
+6. Final testing
+7. Consider publishing to npm (optional)
 
 ## Build & Development Commands
 
@@ -393,12 +412,15 @@ telegram-fetch
 ```
 project-directory/
 ├── telegram-fetcher.config.json  # Static config (profile name, optional userId override)
-├── 12345.md                      # Message text with front matter
-├── 12345.ogg                     # Voice message audio
-├── 12346.md                      # Another message
-├── 12346_1.jpg                   # First image from message 12346
-├── 12346_2.jpg                   # Second image from message 12346
-└── 12347.md                      # Message with no media
+├── .last-fetched-id              # Last update ID (tracks fetch state)
+├── 12345.md                      # Message text with front matter (date, messageId)
+├── 12345.oga                     # Voice message (extension from API)
+├── 12346.md                      # Message with photo + caption
+├── 12346.jpg                     # Photo from message 12346
+├── 12347.md                      # Message with multiple attachments
+├── 12347_1.jpg                   # First attachment
+├── 12347_report.pdf              # Second attachment (original filename preserved)
+└── 12348.md                      # Text-only message
 ```
 
 **Recommended .gitignore:**
