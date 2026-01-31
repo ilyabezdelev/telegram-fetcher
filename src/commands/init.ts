@@ -2,6 +2,8 @@ import { select, confirm, input, password } from '@inquirer/prompts';
 import { configExists, saveConfig, saveLastFetchedId } from '../lib/config.js';
 import { listProfileNames, addProfile, loadProfiles } from '../lib/profiles.js';
 import type { LocalConfig } from '../types.js';
+import { mkdirSync } from 'fs';
+import { join } from 'path';
 
 export async function init(): Promise<void> {
   try {
@@ -110,6 +112,19 @@ export async function init(): Promise<void> {
     }
 
     console.log();
+    const setOutputDir = await confirm({
+      message: 'Save messages to a subdirectory?',
+      default: false,
+    });
+
+    let outputDir: string | undefined;
+    if (setOutputDir) {
+      outputDir = await input({
+        message: 'Output subdirectory path:',
+        default: 'messages',
+      });
+    }
+
     const overrideTelegramUserId = await confirm({
       message: 'Override user ID for this directory?',
       default: false,
@@ -134,6 +149,11 @@ export async function init(): Promise<void> {
     }
 
     const config: LocalConfig = { profile: selectedProfile };
+    if (outputDir) {
+      config.outputDir = outputDir;
+      const fullOutputPath = join(process.cwd(), outputDir);
+      mkdirSync(fullOutputPath, { recursive: true });
+    }
     if (localTelegramUserId !== undefined) {
       config.telegramUserId = localTelegramUserId;
     }
@@ -145,6 +165,9 @@ export async function init(): Promise<void> {
     console.log('✓ Initialized telegram-fetcher in current directory!');
     console.log();
     console.log(`Profile: ${selectedProfile}`);
+    if (outputDir) {
+      console.log(`Output directory: ${outputDir}`);
+    }
     if (localTelegramUserId !== undefined) {
       console.log(`User ID: ${localTelegramUserId} (local override)`);
     }

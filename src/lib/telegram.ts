@@ -114,11 +114,7 @@ export async function fetchMessages(options: FetchMessagesOptions): Promise<Fetc
     }
 
     const text =
-      'text' in message
-        ? message.text
-        : 'caption' in message
-          ? message.caption
-          : undefined;
+      'text' in message ? message.text : 'caption' in message ? message.caption : undefined;
 
     messages.push({
       messageId: message.message_id,

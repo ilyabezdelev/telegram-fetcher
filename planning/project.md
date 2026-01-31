@@ -64,7 +64,8 @@ A CLI tool to fetch latest messages from Telegram (bots, channels, groups, saved
 ```json
 {
   "profile": "bot-profile-name",
-  "telegramUserId": 987654321  // Optional: Override telegramUserId from profile
+  "telegramUserId": 987654321,  // Optional: Override telegramUserId from profile
+  "outputDir": "messages"        // Optional: Subdirectory for messages (default: current directory)
 }
 ```
 

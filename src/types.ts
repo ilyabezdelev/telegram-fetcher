@@ -11,4 +11,5 @@ export interface Profiles {
 export interface LocalConfig {
   profile: string;
   telegramUserId?: number;
+  outputDir?: string;
 }
