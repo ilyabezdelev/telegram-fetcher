@@ -1,0 +1,402 @@
+# Telegram Fetcher - Project Plan
+
+## Overview
+
+A CLI tool to fetch latest messages from Telegram (bots, channels, groups, saved messages) and save them to a local directory.
+
+## Core Functionality
+
+### Message Fetching
+- Fetch messages from Telegram bots (primary use case)
+- Fetch messages from Telegram channels (only via bot access - bot must be member)
+- Fetch messages from Telegram groups (only via bot access - bot must be member)
+
+**Scope limitation**: Using Bot API only (not user account). This means:
+- Authentication via bot token
+- No access to saved messages (user personal storage)
+- Bot must be added to channels/groups to fetch messages
+
+### Content Types
+- **Text content**: Message text and captions
+- **Images**: Photo attachments
+- **Audio messages**: Voice messages and audio files (**CRITICAL REQUIREMENT**)
+  - The chosen library MUST support audio message downloads
+  - This is a primary use case for the tool
+
+### Incremental Fetching
+- Store the latest fetched message ID in a local config file
+- On subsequent runs, only fetch new messages since the last run
+- Config file lives in the target directory where messages are saved
+
+### CLI Design
+- Installable globally (npm install -g or equivalent)
+- Can be run from any directory
+- Detects and reads config from current working directory
+- Initializes new projects with a config file
+
+## Key Design Decisions
+
+### 1. Bot Token Storage - DECIDED
+
+**Approach: Profile-based system**
+- Store bot profiles centrally in `~/.telegram-fetcher/profiles.json` (or similar)
+- Each profile contains: bot token, bot name/description
+- Local config file in project directory references profile by name
+- Supports multiple bots globally, but each directory uses one specific profile
+
+**Benefits:**
+- Bot tokens never in project directory (no git commit risk)
+- Easy to reuse bots across multiple projects
+- Simple local config (just references profile name)
+- Can manage multiple bots centrally
+
+**Example:**
+- Global: `~/.telegram-fetcher/profiles.json` contains bot tokens
+- Local: `./telegram-fetcher.config.json` contains `{"profile": "my-bot-name", "lastMessageId": 123}`
+
+### 2. Configuration File Structure - DECIDED
+
+**Local config file** (in project directory - `telegram-fetcher.config.json`):
+```json
+{
+  "profile": "bot-profile-name",
+  "userId": 987654321  // Optional: Override userId from profile
+}
+```
+
+**Local state file** (in project directory - `.last-fetched-id`):
+```
+12345
+```
+- Plain text file with just the message ID
+- Updated on every fetch (safe to overwrite frequently)
+- Can be `.gitignore`d separately from config
+- Matches pattern from existing telegram posts implementation
+
+**Global profiles file** (`~/.telegram-fetcher/profiles.json`):
+```json
+{
+  "bot-profile-name": {
+    "token": "123456:ABC-DEF...",
+    "description": "My content bot",
+    "userId": 123456789  // Required: Your Telegram user ID
+  }
+}
+```
+
+**User ID behavior:**
+- Required in global profile (error if not set)
+- Can be overridden in local config (optional)
+- When fetching: use local userId if set, otherwise use profile userId
+- Only messages from this user ID will be fetched
+
+### 3. Output Format - DECIDED
+
+**Message format**: Markdown files with YAML front matter
+```markdown
+---
+date: 2026-01-31T10:30:00Z
+messageId: 12345
+---
+
+Message text content here...
+```
+
+**File organization**:
+- Flat directory structure (all files in same directory)
+- One markdown file per message: `{messageId}.md`
+- Media files: `{messageId}.{ext}` (e.g., `12345.jpg`, `12345.ogg`)
+- Multiple media in same message: `{messageId}_1.jpg`, `{messageId}_2.jpg`, etc.
+
+**Media files**:
+- **Audio messages**: `.ogg` (Telegram voice message format)
+- **Images**: `.jpg`, `.png`, etc. (preserve original format)
+- Stored alongside markdown files in same directory
+
+### 4. Telegram API Integration
+- **Library choice: Telegraf** (modern, TypeScript-native, excellent documentation)
+  - ✅ Supports audio message/voice message downloads via `getFileLink()`
+  - ✅ Handles images and media files
+  - ✅ Written in TypeScript with full type definitions
+- **Authentication**: Bot token only (from @BotFather)
+- Rate limiting and error handling
+- Media download and storage capabilities
+
+### 5. CLI Framework & Interactive Prompts
+- **CLI Framework: Commander.js** (argument parsing, command structure)
+- **Interactive Prompts: @inquirer/prompts** (modern, TypeScript-friendly)
+- **Interactive commands**: `init`, `profile add`, `profile remove`
+- **Non-interactive**: Main fetch command
+
+## CLI Commands & Interactive Flows
+
+### `telegram-fetch init` (Interactive)
+1. Check if `telegram-fetcher.config.json` exists in current directory
+2. If exists: Prompt "Config already exists. Reconfigure? (y/N)"
+3. Show profile selection prompt:
+   - List all existing profiles from `~/.telegram-fetcher/profiles.json`
+   - Option: "[Add new profile]"
+4. If "[Add new profile]" selected:
+   - Prompt: "Profile name:"
+   - Prompt: "Bot token:" (masked input)
+   - Prompt: "Your Telegram user ID:"
+   - Prompt: "Description (optional):"
+   - Save to global profiles.json
+5. Ask: "Override user ID for this directory? (y/N)"
+   - If yes: Prompt for userId, save in local config
+   - If no: Use profile's userId
+6. Create local config with selected profile + optional userId override
+
+### `telegram-fetch` (Main command - Non-interactive)
+1. Check if local config exists, error if not
+2. Read last fetched ID from `.last-fetched-id` (or 0 if doesn't exist)
+3. Load profile from global profiles.json
+4. Connect to Telegram with bot token
+5. Fetch messages since last message ID
+6. Download text + media (audio, images)
+7. Save as markdown files with front matter
+8. Update `.last-fetched-id` with latest message ID
+
+### `telegram-fetch profile add` (Interactive)
+- Prompt: "Profile name:"
+- Prompt: "Bot token:" (masked input)
+- Prompt: "Your Telegram user ID:" (required)
+  - Hint: Use `telegram-fetch get-user-id` or @userinfobot to find it
+- Prompt: "Description (optional):"
+- Save to `~/.telegram-fetcher/profiles.json`
+
+### `telegram-fetch get-user-id` (Helper command)
+- Connects to a bot using existing profile
+- Prompts: "Select a profile to use:"
+- Instructions: "Send any message to the bot"
+- Listens for incoming message
+- Displays: "Your Telegram user ID is: 123456789"
+- Can copy this ID when adding profiles
+
+### `telegram-fetch profile list` (Non-interactive)
+- List all profiles from global config
+- Show: name, description (token masked)
+
+### `telegram-fetch profile remove` (Interactive)
+- Show list of profiles
+- Prompt: "Select profile to remove:"
+- Confirm: "Delete profile '{name}'? (y/N)"
+- Remove from global config
+
+### `telegram-fetch --help` or `telegram-fetch -h`
+Display help information (provided automatically by Commander.js):
+```
+Usage: telegram-fetch [options] [command]
+
+CLI tool to fetch latest messages from Telegram bots, channels, and groups
+
+Options:
+  -V, --version          output the version number
+  -h, --help             display help for command
+
+Commands:
+  init                   Initialize telegram-fetcher in current directory
+  profile                Manage bot profiles
+    add                  Add a new bot profile
+    list                 List all bot profiles
+    remove               Remove a bot profile
+  help [command]         display help for command
+```
+
+## Project Structure
+
+```
+telegram-fetcher/
+├── src/
+│   ├── cli.ts          # Main entry point, Commander setup
+│   ├── commands/
+│   │   ├── init.ts     # Interactive init command
+│   │   ├── fetch.ts    # Main fetch logic
+│   │   └── profile.ts  # Profile management commands
+│   ├── lib/
+│   │   ├── config.ts   # Config file read/write
+│   │   ├── profiles.ts # Profile management
+│   │   ├── telegram.ts # Telegram API wrapper
+│   │   └── storage.ts  # Message/media storage
+│   └── types.ts        # TypeScript types
+├── dist/               # Compiled output
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+## Implementation Phases
+
+### Phase 1: Bootstrap CLI Framework 🎯 CURRENT
+**Goal:** Get the CLI working so you can run `telegram-fetch init` and start testing with real bot tokens.
+
+**Tasks:**
+1. Set up TypeScript project structure
+   - Initialize npm project
+   - Configure TypeScript (tsconfig.json matching audio-note-transcripts)
+   - Set up build scripts (`build`, `dev`)
+   - Configure prettier
+
+2. Install dependencies
+   - `commander` - CLI framework
+   - `@inquirer/prompts` - Interactive prompts
+   - `@types/node` - TypeScript types
+   - `tsx` - Development runtime
+   - `prettier` - Code formatting
+
+3. Create basic CLI structure
+   - `src/cli.ts` - Main entry point with Commander setup
+   - `src/commands/init.ts` - Init command skeleton
+   - `src/commands/profile.ts` - Profile commands skeleton
+   - `src/lib/config.ts` - Config file utilities
+   - `src/lib/profiles.ts` - Profile management utilities
+   - `src/types.ts` - TypeScript type definitions
+
+4. Implement profile management
+   - Global profiles.json read/write
+   - `telegram-fetch profile add` - Interactive add with masked token input
+   - `telegram-fetch profile list` - List all profiles
+   - `telegram-fetch profile remove` - Interactive removal
+   - Profile validation (name, token format)
+
+5. Implement init command
+   - `telegram-fetch init` - Interactive profile selection
+   - Create local `telegram-fetcher.config.json`
+   - Create empty `.last-fetched-id` file
+   - Handle existing config (ask to overwrite)
+   - Option to add new profile inline
+
+6. Make globally installable
+   - Configure `bin` in package.json
+   - Test with `npm link`
+   - Verify all commands work globally
+
+**Deliverable:** Working CLI that can manage profiles and initialize directories. Ready to add Telegram fetching logic.
+
+**Test it:**
+```bash
+npm link
+telegram-fetch profile add
+# Add your bot token interactively
+telegram-fetch init
+# Select the profile you just added
+ls -la  # Should see telegram-fetcher.config.json and .last-fetched-id
+```
+
+### Phase 2: Core Telegram Fetching
+**Goal:** Connect to Telegram and fetch messages (no media yet, just text).
+
+**Tasks:**
+1. Install Telegraf dependency
+2. Implement `src/lib/telegram.ts` - Telegram API wrapper
+3. Implement basic message fetching from bot
+4. Test with a real bot receiving messages
+5. Update `.last-fetched-id` after fetch
+
+### Phase 3: Message Storage & Media Downloads
+**Goal:** Save messages as markdown with YAML front matter and download media.
+
+**Tasks:**
+1. Implement markdown generation with front matter
+2. Download and save images
+3. Download and save audio/voice messages
+4. Handle multiple media per message (suffixes)
+5. Test with messages containing various media types
+
+### Phase 4: Polish & Documentation
+**Goal:** Production-ready tool with documentation.
+
+**Tasks:**
+1. Error handling and validation
+2. Rate limiting handling
+3. README with installation and usage
+4. Update CLAUDE.md
+5. Add .gitignore template
+6. Consider publishing to npm (optional)
+
+## Build & Development Commands
+
+Following the pattern from audio-note-transcripts:
+
+```bash
+# Development (run without building)
+npm run dev
+
+# Build TypeScript to dist/
+npm run build
+
+# Format code with prettier
+npm run format
+
+# Install globally for testing
+npm link
+
+# Use globally
+telegram-fetch init
+telegram-fetch
+```
+
+**package.json structure:**
+```json
+{
+  "name": "telegram-fetcher",
+  "bin": {
+    "telegram-fetch": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "@inquirer/prompts": "^latest",
+    "telegraf": "^latest"
+  },
+  "devDependencies": {
+    "@types/node": "^latest",
+    "prettier": "^latest",
+    "tsx": "^latest",
+    "typescript": "^latest"
+  }
+}
+```
+
+## Decisions Made
+
+1. ✅ **Technology**: TypeScript/Node.js with Telegraf library
+2. ✅ **CLI Framework**: Commander.js + @inquirer/prompts for interactive flows
+3. ✅ **Scope**: Bot API only (no user accounts, no saved messages)
+4. ✅ **Multiple bots**: Support multiple bots via central profile system, one profile per directory
+5. ✅ **Filtering**: No filtering by date, sender, or keywords
+6. ✅ **Deleted messages**: No special handling - just fetch from last message ID onward
+7. ✅ **Dry run mode**: Not needed
+8. ✅ **First run behavior**: Fetch all available message history
+9. ✅ **User Experience**: Interactive prompts for setup, simple command for fetching
+
+## All Questions Resolved
+
+✅ All design decisions have been made. Ready to begin implementation.
+
+**Summary of output structure:**
+```
+project-directory/
+├── telegram-fetcher.config.json  # Static config (profile name)
+├── .last-fetched-id              # Dynamic state (last message ID)
+├── 12345.md                      # Message text with front matter
+├── 12345.ogg                     # Voice message audio
+├── 12346.md                      # Another message
+├── 12346_1.jpg                   # First image from message 12346
+├── 12346_2.jpg                   # Second image from message 12346
+└── 12347.md                      # Message with no media
+```
+
+**Recommended .gitignore:**
+```
+.last-fetched-id
+*.md
+*.jpg
+*.png
+*.ogg
+*.mp3
+```
