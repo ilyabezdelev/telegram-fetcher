@@ -1,5 +1,10 @@
 {
   "permissions": {
-    "allow": ["WebFetch(domain:github.com)", "Bash(prettier --write:*)", "WebSearch"]
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "Bash(prettier --write:*)",
+      "WebSearch",
+      "Bash(npx prettier:*)"
+    ]
   }
 }

@@ -68,7 +68,8 @@ Just run `telegram-fetch` again - it only fetches new messages since the last ru
 
 ## What gets saved
 
-- **Messages** - Saved as `{number}.md` with date in YAML front matter
+- **Messages with text** - Saved as `{number}.md` with date in YAML front matter
+- **Files without text/caption** - Only the file is saved (no markdown file created)
 - **Photos** - Saved as `{number}.jpg`
 - **Voice messages** - Saved as `{number}.oga`
 - **Documents** - Saved as `{number}_{filename}.pdf` (original filename preserved)
@@ -97,8 +98,8 @@ telegram-fetch
 
 - `telegram-fetcher.config.json` - Which bot to use, optional output directory
 - `.last-fetched-id` - Tracking file (keeps fetches incremental)
-- `*.md` - Your messages (in current directory or configured subdirectory)
-- `*.jpg`, `*.pdf`, etc. - Your attachments
+- `*.md` - Your messages with text content (in current directory or configured subdirectory)
+- `*.jpg`, `*.pdf`, etc. - Your attachments (markdown only created if there's text/caption)
 
 ## Configuration Files
 

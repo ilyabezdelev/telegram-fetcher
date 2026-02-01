@@ -14,18 +14,21 @@ export async function saveMessage(
   telegramBotToken: string,
   dir: string = process.cwd()
 ): Promise<void> {
-  const metadata: MessageMetadata = {
-    date: message.date.toISOString(),
-    messageId: message.messageId,
-  };
+  const hasTextContent = message.text && message.text.trim().length > 0;
 
-  const content = message.text || '';
-  const markdown = matter.stringify(content, metadata);
+  if (hasTextContent) {
+    const metadata: MessageMetadata = {
+      date: message.date.toISOString(),
+      messageId: message.messageId,
+    };
 
-  const filename = `${message.messageId}.md`;
-  const filepath = join(dir, filename);
+    const markdown = matter.stringify(message.text!, metadata);
 
-  writeFileSync(filepath, markdown, 'utf-8');
+    const filename = `${message.messageId}.md`;
+    const filepath = join(dir, filename);
+
+    writeFileSync(filepath, markdown, 'utf-8');
+  }
 
   let fileIndex = 0;
 
