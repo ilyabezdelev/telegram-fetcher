@@ -1,4 +1,4 @@
-import { writeFileSync } from 'fs';
+import { utimesSync, writeFileSync } from 'fs';
 import { join, parse } from 'path';
 import matter from 'gray-matter';
 import type { FetchedMessage } from './telegram.js';
@@ -28,6 +28,7 @@ export async function saveMessage(
     const filepath = join(dir, filename);
 
     writeFileSync(filepath, markdown, 'utf-8');
+    utimesSync(filepath, message.date, message.date);
   }
 
   let fileIndex = 0;
@@ -44,6 +45,7 @@ export async function saveMessage(
       basePath = join(dir, `${message.messageId}${suffix}`);
     }
 
-    await downloadMedia(telegramBotToken, file.fileId, basePath);
+    const savedPath = await downloadMedia(telegramBotToken, file.fileId, basePath);
+    utimesSync(savedPath, message.date, message.date);
   }
 }

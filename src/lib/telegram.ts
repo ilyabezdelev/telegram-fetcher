@@ -164,7 +164,7 @@ export async function downloadMedia(
 
   fs.writeFileSync(finalPath, buffer);
 
-  return ext;
+  return finalPath;
 }
 
 function isMessageUpdate(update: Update): update is Update.MessageUpdate {
